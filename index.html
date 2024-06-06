@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrigDmeter demo</title>
+    <style>
+        * {
+            padding:0;
+            margin: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            height: 100%;
+            width: 100%;
+            background-color: #433343;
+        }
+        #container {
+            display: flex;
+            gap: 1em;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+    <button onclick="handle_button1()">click me</button>
+    <button onclick="toggle_fov()">toggle_fov</button>
+    <script src="./index.js"></script>
+</body>
+</html>
