@@ -1,35 +1,69 @@
 
 const CONTAINER = document.getElementById("container")
 const FOV = 160;
-const CELL_COLOR_1 = "#554455";
-const CELL_COLOR_2 = "#ffeeff";
+const GRID_SIZE = 35;
+const CANVAS_SIZE = 400;
+const CELL_COLOR_1 = "#f7aa34";
+const CELL_COLOR_2 = "#232323";
+
+/**
+ * 
+ * @param {HTMLCanvasElement} canvas 
+ * @param {boolean[][]} canvas 
+ */
+function get_canvas_information(canvas, grid) {
+    let grid_height = grid.length;
+    let grid_width = (grid[0] && grid[0].length) ?? 0
+
+    let canvas_width = canvas.width;
+    let canvas_height = canvas.height;
+
+    // prevent floats
+    canvas_width -= canvas_width % grid_width
+    canvas_height -= canvas_height % grid_height;
+
+    let cell_width = (canvas_width / grid_width);
+    let cell_height = (canvas_height / grid_height);
+
+    return {
+        grid_height,
+        grid_width,
+        canvas_width,
+        canvas_height,
+        cell_width,
+        cell_height
+    }
+}
 
 /**
  * @param {HTMLCanvasElement} canvas 
  * @param {boolean[][]} grid 
  */
 function render_grid(canvas, grid, c1 = CELL_COLOR_2, c2 = CELL_COLOR_1) {
-    let gheight = grid.length;
-    let gwidth = (grid[0] && grid[0].length) ?? 0;
-    let cheight = canvas.height;
-    let cwidth = canvas.width;
-
-    let cell_width = Math.floor(cwidth / gwidth);
-    let cell_height = Math.floor(cheight / gheight);
+    const {
+        grid_height,
+        grid_width,
+        canvas_width,
+        canvas_height,
+        cell_width,
+        cell_height
+    } = get_canvas_information(canvas, grid)
 
     let ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, cwidth, cheight);
+    ctx.clearRect(0, 0, canvas_width, canvas_height);
 
-    for (let y = 0; y < gheight; y++) {
-        for (let x = 0; x < gwidth; x++) {
+    for (let y = 0; y < grid_height; y++) {
+        for (let x = 0; x < grid_width; x++) {
             let xoffset = x * cell_width, yoffset = y * cell_height;
             if (!!grid[y][x]) {
                 ctx.fillStyle = c1
             } else {
                 ctx.fillStyle = c2
             }
-            ctx.strokeRect(xoffset, yoffset, cell_width, cell_height)
-            ctx.fillRect(xoffset, yoffset, cell_width, cell_height)
+            ctx.beginPath()
+            ctx.rect(xoffset, yoffset, cell_width, cell_height)
+            ctx.fill()
+            ctx.stroke()
         }
     }
 }
@@ -125,32 +159,53 @@ function make_grid(h, w = h) {
     return (new Array(h)).fill(0).map(() => new Array(w).fill(0))
 }
 
-let grid = make_grid(50)
-let canvas_size = 350;
-let canvas1 = CONTAINER.appendChild(document.createElement("canvas"))
-canvas1.width = canvas_size;
-canvas1.height = canvas_size;
-let canvas2 = CONTAINER.appendChild(document.createElement("canvas"))
-canvas2.width = canvas_size;
-canvas2.height = canvas_size;
+let grid = make_grid(GRID_SIZE)
 
-function handle_canvas_click(ev) {
+let camera1_container = CONTAINER.appendChild(document.createElement("div"));
+let canvas1 = camera1_container.appendChild(document.createElement("canvas")); canvas1.width = CANVAS_SIZE; canvas1.height = CANVAS_SIZE;
 
-    let rect = canvas1.getBoundingClientRect();
-    // get cell based upon coordinates
+let camera2_container = CONTAINER.appendChild(document.createElement("div"));
+let canvas2 = camera2_container.appendChild(document.createElement("canvas")); canvas2.width = CANVAS_SIZE; canvas2.height = CANVAS_SIZE;
 
-    let gheight = grid.length;
-    let gwidth = (grid[0] && grid[0].length) ?? 0;
+let canvas_camera1 = camera1_container.appendChild(document.createElement("canvas")); canvas_camera1.width = CANVAS_SIZE; canvas_camera1.height = 30;
+let canvas_camera2 = camera2_container.appendChild(document.createElement("canvas")); canvas_camera2.width = CANVAS_SIZE; canvas_camera2.height = 30;
 
-    let x;
-    let y;
-    // TODO: fix the math it can be know if the object is within range beforehand
-    x = Math.floor((ev.clientX - rect.x) / (canvas1.width / gwidth))
-    y = Math.floor((ev.clientY - rect.y) / (canvas1.height / gheight))
 
-    grid[y][x] = !grid[y][x]
+let camera1_pos = 0
+let camera2_pos = grid[0].length - 1
+
+function update() {
     render_grid(canvas1, grid)
     render_grid(canvas2, grid)
+
+    render_grid(canvas_camera1, [get_camera_cells(grid, camera1_pos, FOV)])
+    render_grid(canvas_camera2, [get_camera_cells(grid, camera2_pos, FOV)])
+}
+
+function handle_canvas_click(ev) {
+    let target = ev.currentTarget
+    if (!target || !(target instanceof HTMLCanvasElement)) {
+        return;
+    }
+
+    const {
+        grid_height,
+        grid_width,
+        cell_width,
+        cell_height
+    } = get_canvas_information(target, grid)
+
+    let rect = target.getBoundingClientRect();
+    let x = Math.floor((ev.clientX - rect.x) / cell_width)
+    let y = Math.floor((ev.clientY - rect.y) / cell_height)
+
+    if (x >= grid_width || y >= grid_height) {
+        return
+    }
+
+    grid[y][x] = !grid[y][x]
+
+    update()
 
     console.log(`(${x}, ${y})`)
 
@@ -161,11 +216,7 @@ function handle_canvas_click(ev) {
 canvas1.addEventListener("click", handle_canvas_click)
 canvas2.addEventListener("click", handle_canvas_click)
 
-render_grid(canvas1, grid)
-render_grid(canvas2, grid)
-
-let camera1_pos = 0
-let camera2_pos = grid[0].length -1
+update()
 
 function calculate_angle(grid, position) {
     let values = get_camera_cells(grid, position, FOV)
@@ -254,14 +305,14 @@ function handle_button1() {
 
     let a = 90 - (calculate_angle(grid, camera1_pos))
     let b = 90 + (calculate_angle(grid, camera2_pos))
-    let base_length = camera2_pos - camera1_pos -1
+    let base_length = camera2_pos - camera1_pos - 1
 
     // c·sin(B)/sin(C)
     let a_hyp = base_length * Math.sin(degrees2radians(b)) / Math.sin(degrees2radians(180 - a - b))
     let distance = Math.sin(degrees2radians(a)) * a_hyp
     let x_pos = Math.cos(degrees2radians(a)) * a_hyp + camera1_pos
     console.log(x_pos, distance)
-    
+
 
     // let g1 = get_camera_cells(grid, camera1_pos, FOV)
     // let g2 = get_camera_cells(grid, camera2_pos, FOV)
