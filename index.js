@@ -71,6 +71,9 @@ function render_grid(canvas, grid, c1 = CELL_COLOR_2, c2 = CELL_COLOR_1) {
 function degrees2radians(angle) {
     return angle / 180 * Math.PI;
 }
+function radians2degrees(radians) {
+    return radians / Math.PI * 180;
+}
 
 function _get_base(y, fov = FOV) {
     let angle
@@ -131,23 +134,30 @@ function get_camera_cells(grid, position, fov) {
     let gwidth = (grid[0] && grid[0].length) ?? 0;
 
 
-    let values = new Array(gwidth).fill(0).map(() => false)
+    let values = new Array(gwidth).fill(0).map(() => false);
+    let midpoint = Math.floor(values.length / 2)
+    // values are evenly sized buckets where the angle angles are something
+    let angle_chunk_size = (fov / (values.length - 1));
 
-    column_loop: for (let x = 0; x < gwidth; x++) {
+
+
+    for (let x = 0; x < gwidth; x++) {
         for (let y = 0; y < gheight; y++) {
             if (!cell_in_fov(position, fov, x, y)) {
                 continue
             }
 
             if (!!grid[y][x]) {
-                // interplate the distance from the edge
-                let base = _get_base(y, fov)
-                let ratio = (x - position) / base
-                let value_pos = Math.floor(
-                    Math.floor(values.length / 2) + ratio * values.length
-                )
+                let real_angle = 90 - Math.abs(
+                    radians2degrees(
+                        Math.atan(y / (position - x))
+                    )
+                );
+
+                if (x < position) real_angle *= -1;
+                
+                let value_pos = midpoint + Math.round(real_angle / angle_chunk_size);
                 values[value_pos] = true
-                continue column_loop;
             }
         }
     }
@@ -161,10 +171,10 @@ function make_grid(h, w = h) {
 
 let grid = make_grid(GRID_SIZE)
 
-let camera1_container = CONTAINER.appendChild(document.createElement("div"));
+let camera1_container = CONTAINER.appendChild(document.createElement("div")); camera1_container.style.display = "flex"; camera1_container.style.flexFlow = "column"
 let canvas1 = camera1_container.appendChild(document.createElement("canvas")); canvas1.width = CANVAS_SIZE; canvas1.height = CANVAS_SIZE;
 
-let camera2_container = CONTAINER.appendChild(document.createElement("div"));
+let camera2_container = CONTAINER.appendChild(document.createElement("div")); camera2_container.style.display = "flex"; camera2_container.style.flexFlow = "column"
 let canvas2 = camera2_container.appendChild(document.createElement("canvas")); canvas2.width = CANVAS_SIZE; canvas2.height = CANVAS_SIZE;
 
 let canvas_camera1 = camera1_container.appendChild(document.createElement("canvas")); canvas_camera1.width = CANVAS_SIZE; canvas_camera1.height = 30;
@@ -233,9 +243,12 @@ function calculate_angle(grid, position) {
 
     let midpoint = Math.floor(values.length / 2);
 
+
     // find if target is to the left or right
     let eps = 0.02;
-    let angle = 0;
+
+    // let angle = 0; Faster conversion onto the real angle
+    let angle = Math.floor(FOV / values.length * (x - midpoint) * 0.85);
 
     if (x < midpoint) {
         eps *= -1
@@ -253,6 +266,8 @@ function calculate_angle(grid, position) {
         let found = false
         let prev_x = start_x_offset;
         for (let y = start_y_offset; y < grid.length; y++) {
+            // TODO: check if there are other angles that could be better
+            // i.e find the next angle that does not contain the object, and then return the median
 
             let x = start_x_offset + (y - start_y_offset) / Math.tan(degrees2radians(90 - angle))
             x = Math.round(x)
@@ -270,7 +285,9 @@ function calculate_angle(grid, position) {
             } else break
             prev_x = x
         }
-        if (found) return angle
+        if (found) {
+            return angle
+        }
     }
 
     throw "could not find a aproximate angle"
